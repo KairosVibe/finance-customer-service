@@ -1,0 +1,310 @@
+slots:
+  account_no:
+    type: text
+    label: 账户号/卡号
+    description: 用户的银行账户号或银行卡号
+  tx_date:
+    type: text
+    label: 交易日期
+    description: 要查询的交易时间（如“昨天”“最近”），不明确时可回复“最近”
+  product_code:
+    type: text
+    label: 贷款产品
+    description: 想申请的贷款产品类型（如消费贷款、经营贷款）
+  apply_amount:
+    type: text
+    label: 贷款金额
+    description: 申请的贷款金额（元）
+  apply_term_months:
+    type: text
+    label: 贷款期限
+    description: 贷款期限（月数）
+  repayment_method:
+    type: text
+    label: 还款方式
+    description: 还款方式（等额本息或先息后本）
+  loan_purpose:
+    type: text
+    label: 贷款用途
+    description: 贷款用途（如消费、经营、装修）
+  card_no:
+    type: text
+    label: 信用卡号
+    description: 需要挂失的信用卡卡号
+  loss_reason:
+    type: text
+    label: 挂失原因
+    description: 信用卡挂失原因（如丢失、被盗）
+  identity_info:
+    type: text
+    label: 身份验证信息
+    description: 身份验证要素（证件号码后四位或预留手机号）
+  ticket_type:
+    type: text
+    label: 工单类型
+    description: 投诉工单类型（如转账未到账、服务投诉、账户问题）
+  transaction_no:
+    type: text
+    label: 关联交易号
+    description: 关联的交易流水号（没有可回复“无”）
+  description:
+    type: text
+    label: 问题描述
+    description: 投诉或问题的具体描述
+  confirm:
+    type: text
+    label: 确认
+    description: 确认提交或取消（回复“确认”或“取消”）
+
+flows:
+  account_query:
+    name: 账户查询
+    description: 查询账户余额、可用余额、冻结金额等账户信息
+    steps:
+      - id: start
+        type: start
+        next: ask_account
+      - id: ask_account
+        type: collect
+        slot_name: account_no
+        response:
+          text: "请提供您的银行卡号或账户号。"
+        next: query
+      - id: query
+        type: action
+        action: action_lookup_account
+        next: show
+      - id: show
+        type: action
+        action: action_response
+        args:
+          text: "账户{{ slots.account_no }}当前余额 {{ slots.account_balance }} 元，冻结金额 {{ slots.account_frozen_amount }} 元，可用余额 {{ slots.account_available_balance }} 元。"
+        next: end
+      - id: end
+        type: end
+        next: []
+
+  transaction_query:
+    name: 交易查询
+    description: 查询账户近期交易流水、金额与时间
+    steps:
+      - id: start
+        type: start
+        next: ask_account
+      - id: ask_account
+        type: collect
+        slot_name: account_no
+        response:
+          text: "请提供您的银行卡号或账户号。"
+        next: ask_date
+      - id: ask_date
+        type: collect
+        slot_name: tx_date
+        response:
+          text: "请问查询哪天的交易？可以告诉我具体日期，或回复“最近”查询最近几笔。"
+        next: query
+      - id: query
+        type: action
+        action: action_lookup_transactions
+        next: show
+      - id: show
+        type: action
+        action: action_response
+        args:
+          text: "{{ slots.transactions_summary }}"
+        next: end
+      - id: end
+        type: end
+        next: []
+
+  loan_apply:
+    name: 贷款申请
+    description: 引导客户提交消费贷款或经营贷款申请
+    steps:
+      - id: start
+        type: start
+        next: ask_product
+      - id: ask_product
+        type: collect
+        slot_name: product_code
+        response:
+          text: "请问您想申请哪类贷款？我们有消费贷款和经营贷款可选。"
+        next: ask_amount
+      - id: ask_amount
+        type: collect
+        slot_name: apply_amount
+        response:
+          text: "请问贷款金额是多少元？"
+        next: ask_term
+      - id: ask_term
+        type: collect
+        slot_name: apply_term_months
+        response:
+          text: "请问贷款期限是几个月？"
+        next: ask_repay
+      - id: ask_repay
+        type: collect
+        slot_name: repayment_method
+        response:
+          text: "请选择还款方式：等额本息，还是先息后本？"
+        next: ask_purpose
+      - id: ask_purpose
+        type: collect
+        slot_name: loan_purpose
+        response:
+          text: "请问贷款用途是什么？（如消费、经营、装修）"
+        next: ask_confirm
+      - id: ask_confirm
+        type: collect
+        slot_name: confirm
+        response:
+          text: "请确认贷款申请信息：产品 {{ slots.product_code }}，金额 {{ slots.apply_amount }} 元，期限 {{ slots.apply_term_months }} 个月，还款方式 {{ slots.repayment_method }}，用途 {{ slots.loan_purpose }}。贷款会产生利息并影响个人征信，请确认理性借贷。回复“确认”提交，回复“取消”放弃。"
+        validated:
+          condition: "slots.get('confirm') in ['确认','确定','是的','取消','不办了','算了']"
+          failure_response:
+            text: "请直接回复“确认”提交，或回复“取消”放弃本次申请。"
+        next:
+          - if: "slots.get('confirm') in ['确认','确定','是的']"
+            then: submit
+          - if: "slots.get('confirm') in ['取消','不办了','算了']"
+            then: canceled
+          - else: ask_confirm
+      - id: submit
+        type: action
+        action: action_submit_loan
+        next: show_result
+      - id: show_result
+        type: action
+        action: action_response
+        args:
+          text: "{{ slots.loan_result }}"
+        next: end
+      - id: canceled
+        type: action
+        action: action_response
+        args:
+          text: "好的，已为您取消本次贷款申请。"
+        next: end
+      - id: end
+        type: end
+        next: []
+
+  card_loss_report:
+    name: 信用卡挂失
+    description: 引导客户办理信用卡挂失
+    steps:
+      - id: start
+        type: start
+        next: ask_card
+      - id: ask_card
+        type: collect
+        slot_name: card_no
+        response:
+          text: "请提供需要挂失的信用卡卡号。"
+        next: ask_reason
+      - id: ask_reason
+        type: collect
+        slot_name: loss_reason
+        response:
+          text: "请问挂失原因是什么？（如丢失、被盗）"
+        next: ask_identity
+      - id: ask_identity
+        type: collect
+        slot_name: identity_info
+        response:
+          text: "为完成身份验证，请提供证件号码后四位或预留手机号。"
+        next: ask_confirm
+      - id: ask_confirm
+        type: collect
+        slot_name: confirm
+        response:
+          text: "请确认挂失信息：信用卡号 {{ slots.card_no }}，挂失原因 {{ slots.loss_reason }}，身份验证信息 {{ slots.identity_info }}。挂失成功后该卡将立即止付，盗刷风险由银行承担。回复“确认”提交，回复“取消”放弃。"
+        validated:
+          condition: "slots.get('confirm') in ['确认','确定','是的','取消','不办了','算了']"
+          failure_response:
+            text: "请直接回复“确认”提交，或回复“取消”放弃本次挂失。"
+        next:
+          - if: "slots.get('confirm') in ['确认','确定','是的']"
+            then: submit
+          - if: "slots.get('confirm') in ['取消','不办了','算了']"
+            then: canceled
+          - else: ask_confirm
+      - id: submit
+        type: action
+        action: action_card_loss
+        next: show_result
+      - id: show_result
+        type: action
+        action: action_response
+        args:
+          text: "{{ slots.loss_result }}"
+        next: end
+      - id: canceled
+        type: action
+        action: action_response
+        args:
+          text: "好的，已为您取消本次挂失申请。"
+        next: end
+      - id: end
+        type: end
+        next: []
+
+  complaint_ticket:
+    name: 投诉工单
+    description: 创建投诉或建议工单
+    steps:
+      - id: start
+        type: start
+        next: ask_type
+      - id: ask_type
+        type: collect
+        slot_name: ticket_type
+        response:
+          text: "请问您的投诉类型是什么？（如转账未到账、服务投诉、账户问题）"
+        next: ask_tx
+      - id: ask_tx
+        type: collect
+        slot_name: transaction_no
+        response:
+          text: "请提供关联的交易流水号（没有可回复“无”）。"
+        next: ask_desc
+      - id: ask_desc
+        type: collect
+        slot_name: description
+        response:
+          text: "请描述一下具体的问题情况。"
+        next: ask_confirm
+      - id: ask_confirm
+        type: collect
+        slot_name: confirm
+        response:
+          text: "请确认工单信息：类型 {{ slots.ticket_type }}，关联交易号 {{ slots.transaction_no }}，问题描述 {{ slots.description }}。回复“确认”提交，回复“取消”放弃。"
+        validated:
+          condition: "slots.get('confirm') in ['确认','确定','是的','取消','不办了','算了']"
+          failure_response:
+            text: "请直接回复“确认”提交，或回复“取消”放弃本次工单。"
+        next:
+          - if: "slots.get('confirm') in ['确认','确定','是的']"
+            then: submit
+          - if: "slots.get('confirm') in ['取消','不办了','算了']"
+            then: canceled
+          - else: ask_confirm
+      - id: submit
+        type: action
+        action: action_create_ticket
+        next: show_result
+      - id: show_result
+        type: action
+        action: action_response
+        args:
+          text: "{{ slots.ticket_result }}"
+        next: end
+      - id: canceled
+        type: action
+        action: action_response
+        args:
+          text: "好的，已为您取消本次工单提交。"
+        next: end
+      - id: end
+        type: end
+        next: []

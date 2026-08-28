@@ -1,0 +1,35 @@
+slots:
+  user_name:
+    type: text
+    label: 用户名
+    description: 用户的名字
+
+flows:
+  hello:
+    name: 问候流程
+    description: 简单的问候演示
+    steps:
+      - id: start
+        type: start
+        next: greet
+      - id: greet
+        type: action
+        action: action_echo
+        args:
+          text: "你好！我是通用智能客服演示。"
+        next: ask_name
+      - id: ask_name
+        type: collect
+        slot_name: user_name
+        response:
+          text: "请告诉我你的名字？"
+        next: say_hello
+      - id: say_hello
+        type: action
+        action: action_echo
+        args:
+          text: "很高兴认识你，{{ slots.user_name }}！"
+        next: end
+      - id: end
+        type: end
+        next: []

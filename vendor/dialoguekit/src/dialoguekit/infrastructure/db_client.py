@@ -1,0 +1,38 @@
+"""
+数据库的引擎
+数据库连接工厂
+"""
+import asyncio
+
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker, AsyncEngine
+from sqlalchemy import text
+from dialoguekit.config.settings import settings
+
+session_engine: AsyncEngine | None = None
+
+session_factory: async_sessionmaker[AsyncSession] | None = None
+
+
+def init_db_engine():
+    global session_engine, session_factory
+
+    session_engine = create_async_engine(url=settings.database_url, echo=True)
+    session_factory = async_sessionmaker(session_engine, expire_on_commit=False)
+
+
+async def dispose_engine():
+    await session_engine.dispose()
+
+
+async def main_test():
+    init_db_engine()
+
+    async with session_factory() as session:
+        cursor = await session.execute(text("select 1"))
+        print(cursor.mappings().fetchone())
+
+    await  dispose_engine()
+
+
+if __name__ == '__main__':
+    asyncio.run(main_test())
